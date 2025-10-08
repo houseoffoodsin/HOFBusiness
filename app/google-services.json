@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "143228389148",
+    "project_id": "house-of-foods-business",
+    "storage_bucket": "house-of-foods-business.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:143228389148:android:49ea89d739c1b466ac9cd9",
+        "android_client_info": {
+          "package_name": "com.example.hofbusiness"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrHnC8Xng7Bl8gTPZ-JUsJey2byBeZ04g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
