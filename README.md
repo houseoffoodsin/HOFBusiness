@@ -1,4 +1,4 @@
-# 🍪 House Of Foods
+#  House Of Foods
 
 **An Android application built with Kotlin and Jetpack Compose for managing homemade food orders, kitchen preparation, and business analytics — inspired by the warmth and authenticity of home-cooked flavors.**
 
@@ -62,6 +62,4 @@ Built using **Kotlin**, **Jetpack Compose**, and **Firebase**, it features a cle
 - Cleanly formatted with headers and structure
 
 ---
-
-## 🔥 Firebase Structure
 
