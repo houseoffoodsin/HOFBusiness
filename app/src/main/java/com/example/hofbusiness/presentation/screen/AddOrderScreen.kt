@@ -550,7 +550,6 @@ fun AddItemDialog(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-
                 // Quantity Input
                 OutlinedTextField(
                     value = quantity,

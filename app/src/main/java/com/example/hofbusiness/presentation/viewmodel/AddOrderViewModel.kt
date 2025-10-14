@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.hofbusiness.data.model.*
 import com.example.hofbusiness.data.repository.CustomerRepository
 import com.example.hofbusiness.data.repository.OrderRepository
+import com.example.hofbusiness.presentation.state.AddOrderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -147,6 +150,8 @@ class AddOrderViewModel @Inject constructor(
 
                 // Generate order ID and create order
                 val orderId = orderRepository.generateOrderId()
+                val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                val orderDateTime = dateTimeFormat.format(Date())
                 val order = Order(
                     id = orderId,
                     customerId = currentState.mobileNumber,
@@ -240,17 +245,3 @@ class AddOrderViewModel @Inject constructor(
 
     fun getMenuItems(): List<MenuItem> = menuItems
 }
-
-data class AddOrderUiState(
-    val customerName: String = "",
-    val mobileNumber: String = "",
-    val address: String = "",
-    val deliveryMode: DeliveryMode = DeliveryMode.PICKUP,
-    val paymentMode: PaymentMode = PaymentMode.CASH,
-    val orderItems: List<OrderItem> = emptyList(),
-    val totalAmount: Int = 0,
-    val isLoading: Boolean = false,
-    val isOrderSubmitted: Boolean = false,
-    val generatedOrderId: String = "",
-    val errorMessage: String? = null
-)

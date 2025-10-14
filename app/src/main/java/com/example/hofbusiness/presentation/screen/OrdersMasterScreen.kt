@@ -1,5 +1,6 @@
 package com.example.hofbusiness.presentation.screen
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +21,7 @@ import com.example.hofbusiness.data.model.Order
 import com.example.hofbusiness.data.model.OrderStatus
 import com.example.hofbusiness.presentation.viewmodel.OrdersMasterViewModel
 import com.example.hofbusiness.presentation.viewmodel.OrderStatusField
+import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -214,8 +216,19 @@ fun FiltersSection(
             ) {
                 OutlinedButton(
                     onClick = {
-                        val today = Date()
-                        onDateRangeChange(today, today)
+                        val calendar = Calendar.getInstance().apply {
+                            set(Calendar.HOUR_OF_DAY, 0)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }
+
+                        val calendarTomorrow = Calendar.getInstance().apply {
+                            time = calendar.time
+                            add(Calendar.DAY_OF_YEAR, 1)
+                        }
+
+                        onDateRangeChange(calendar.time, calendarTomorrow.time)
                     },
                     modifier = Modifier.weight(1f)
                 ) {

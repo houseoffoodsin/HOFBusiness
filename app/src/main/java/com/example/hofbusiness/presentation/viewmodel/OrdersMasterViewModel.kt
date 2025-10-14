@@ -5,10 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.hofbusiness.data.model.Order
 import com.example.hofbusiness.data.model.OrderStatus
 import com.example.hofbusiness.data.repository.OrderRepository
+import com.example.hofbusiness.presentation.state.OrdersMasterUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 
@@ -143,16 +143,6 @@ class OrdersMasterViewModel @Inject constructor(
         }
     }
 }
-
-data class OrdersMasterUiState(
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val searchQuery: String = "",
-    val selectedStatus: OrderStatus? = null,
-    val startDate: Date? = null,
-    val endDate: Date? = null,
-    val showFilters: Boolean = false
-)
 
 enum class OrderStatusField {
     PAYMENT_RECEIVED,

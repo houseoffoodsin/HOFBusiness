@@ -63,7 +63,7 @@ class ExportService @Inject constructor(
         }
 
         // Auto-size columns
-        headers.indices.forEach { sheet.autoSizeColumn(it) }
+//        headers.indices.forEach { sheet.autoSizeColumn(it) }
 
         // Save file
         val fileName = "orders_report_${System.currentTimeMillis()}.xlsx"
@@ -109,7 +109,7 @@ class ExportService @Inject constructor(
         }
 
         // Auto-size columns
-        headers.indices.forEach { sheet.autoSizeColumn(it) }
+//        headers.indices.forEach { sheet.autoSizeColumn(it) }
 
         // Save file
         val fileName = "analytics_report_${System.currentTimeMillis()}.xlsx"
@@ -218,7 +218,6 @@ class ExportService @Inject constructor(
             workbook.write(outputStream)
         }
         workbook.close()
-
         file.absolutePath
     }
 

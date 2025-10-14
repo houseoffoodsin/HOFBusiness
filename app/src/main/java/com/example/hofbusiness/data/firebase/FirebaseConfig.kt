@@ -32,7 +32,6 @@ object FirebaseConfig {
         FirebaseFirestore.getInstance().firestoreSettings = settings
     }
 
-
     fun setupOfflineSupport() {
         // Enable network connectivity
         FirebaseFirestore.getInstance().enableNetwork()

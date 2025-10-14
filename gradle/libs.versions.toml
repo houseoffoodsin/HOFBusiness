@@ -57,8 +57,8 @@ poi-ooxml = {group = "org.apache.poi",name = "poi-ooxml",version.ref= "apache-po
 
 #PDF Generation
 itext7-core = {group = "com.itextpdf",name = "itext7-core",version.ref = "itextpdf"}
-itext7-layout = {group = "com.itextpdf",name = "itext7-layout",version.ref = "itextpdf"}
-itext7-io = {group = "com.itextpdf",name = "itext7-io",version.ref = "itextpdf"}
+itext7-layout = {group = "com.itextpdf",name = "layout",version.ref = "itextpdf"}
+itext7-io = {group = "com.itextpdf",name = "io",version.ref = "itextpdf"}
 
 
 [plugins]

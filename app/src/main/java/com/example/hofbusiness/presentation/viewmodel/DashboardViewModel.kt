@@ -5,223 +5,291 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hofbusiness.data.model.DailyAnalytics
-import com.example.hofbusiness.data.model.DashboardData
 import com.example.hofbusiness.data.model.Order
-import com.example.hofbusiness.data.model.OrderStatus
-import com.example.hofbusiness.data.repository.AnalyticsRepository
-import com.example.hofbusiness.data.repository.CustomerRepository
 import com.example.hofbusiness.data.repository.OrderRepository
-import com.example.hofbusiness.presentation.state.DashboardUiState
 import com.example.hofbusiness.data.service.ExportService
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
-    private val analyticsRepository: AnalyticsRepository,
-    private val customerRepository: CustomerRepository,
     private val exportService: ExportService
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<DashboardUiState>(DashboardUiState.Loading)
+    private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
-    fun loadDashboardData() {
+    private val _selectedPeriod = MutableStateFlow(TimePeriod.DAY)
+    val selectedPeriod: StateFlow<TimePeriod> = _selectedPeriod.asStateFlow()
+
+    private val _dashboardMetrics = MutableStateFlow(DashboardMetrics())
+    val dashboardMetrics: StateFlow<DashboardMetrics> = _dashboardMetrics.asStateFlow()
+
+    private val _orders = MutableStateFlow<List<Order>>(emptyList())
+    private val _analytics = MutableStateFlow<List<DailyAnalytics>>(emptyList())
+
+    init {
+        loadDashboardData()
+    }
+
+    fun selectTimePeriod(period: TimePeriod) {
+        _selectedPeriod.value = period
+        loadDashboardData()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun exportDashboardReport() {
         viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true) }
+
             try {
-                _uiState.value = DashboardUiState.Loading
-
-                // Load all dashboard data
-                val orders = orderRepository.getAllOrders().first()
-                val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-
-                // Filter today's orders
-                val todayOrders = orders.filter {
-                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(it.orderDate) == todayDate
-                }
-
-                // Calculate dashboard metrics
-                val dashboardData = DashboardData(
-                    totalOrders = orders.size,
-                    todayOrders = todayOrders.size,
-                    totalRevenue = orders.sumOf { it.totalAmount },
-                    todayRevenue = todayOrders.sumOf { it.totalAmount },
-                    pendingOrders = orders.count { it.status == OrderStatus.PENDING },
-                    completedOrders = orders.count { it.status == OrderStatus.COMPLETED },
-                    cancelledOrders = orders.count { it.status == OrderStatus.CANCELLED },
-                    averageOrderValue = if (orders.isNotEmpty()) orders.sumOf { it.totalAmount } / orders.size else 0,
-                    recentOrders = orders.sortedByDescending { it.orderDate }.take(5),
-                    topItems = getTopItems(orders)
+                val filePath = exportService.exportDashboardReport(
+                    orders = _orders.value,
+                    analytics = _analytics.value,
+                    period = _selectedPeriod.value.displayName
                 )
 
-                _uiState.value = DashboardUiState.Success(dashboardData)
+                _uiState.update {
+                    it.copy(
+                        isExporting = false,
+                        exportMessage = "Dashboard report exported successfully to: $filePath"
+                    )
+                }
             } catch (e: Exception) {
-                _uiState.value = DashboardUiState.Error(e.message ?: "Unknown error")
+                _uiState.update {
+                    it.copy(
+                        isExporting = false,
+                        errorMessage = "Export failed: ${e.message}"
+                    )
+                }
             }
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
-    fun exportData(
-        exportType: ExportType,
-        dateRange: DateRange,
-        onSuccess: (String) -> Unit,
-        onError: (String) -> Unit
-    ) {
+    fun exportOrdersToExcel() {
         viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true) }
+
             try {
-                val filePath = when (exportType) {
-                    ExportType.ORDERS -> {
-                        val orders = getOrdersForDateRange(dateRange)
-                        exportService.exportOrdersToExcel(orders)
-                    }
-                    ExportType.ANALYTICS -> {
-                        val analytics = getAnalyticsForDateRange(dateRange)
-                        exportService.exportAnalyticsToExcel(analytics)
-                    }
-                    ExportType.INVENTORY -> {
-                        exportService.exportInventoryToExcel()
-                    }
-                    ExportType.CUSTOMERS -> {
-                        val customers = customerRepository.getAllCustomers().first()
-                        exportService.exportCustomersToExcel(customers)
-                    }
+                val filePath = exportService.exportOrdersToExcel(_orders.value)
+                _uiState.update {
+                    it.copy(
+                        isExporting = false,
+                        exportMessage = "Orders exported successfully to: $filePath"
+                    )
                 }
-                onSuccess(filePath)
             } catch (e: Exception) {
-                onError(e.message ?: "Export failed")
-            }
-        }
-    }
-
-    private suspend fun getOrdersForDateRange(dateRange: DateRange): List<Order> {
-        val allOrders = orderRepository.getAllOrders().first()
-        val calendar = Calendar.getInstance()
-
-        return when (dateRange) {
-            DateRange.TODAY -> {
-                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                allOrders.filter {
-                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(it.orderDate) == today
+                _uiState.update {
+                    it.copy(
+                        isExporting = false,
+                        errorMessage = "Export failed: ${e.message}"
+                    )
                 }
             }
-            DateRange.LAST_7_DAYS -> {
-                calendar.add(Calendar.DAY_OF_YEAR, -7)
-                val weekAgo = calendar.time
-                allOrders.filter { it.orderDate >= weekAgo }
-            }
-            DateRange.LAST_30_DAYS -> {
-                calendar.add(Calendar.DAY_OF_YEAR, -30)
-                val monthAgo = calendar.time
-                allOrders.filter { it.orderDate >= monthAgo }
-            }
-            DateRange.THIS_MONTH -> {
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                val monthStart = calendar.time
-                allOrders.filter { it.orderDate >= monthStart }
-            }
-            DateRange.LAST_MONTH -> {
-                // Set to first day of last month
-                calendar.add(Calendar.MONTH, -1)
-                calendar.set(Calendar.DAY_OF_MONTH, 1)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                calendar.set(Calendar.MINUTE, 0)
-                calendar.set(Calendar.SECOND, 0)
-                val lastMonthStart = calendar.time
+        }
+    }
 
-                // Set to last day of last month
-                calendar.add(Calendar.MONTH, 1)
-                calendar.add(Calendar.DAY_OF_MONTH, -1)
-                calendar.set(Calendar.HOUR_OF_DAY, 23)
-                calendar.set(Calendar.MINUTE, 59)
-                calendar.set(Calendar.SECOND, 59)
-                val lastMonthEnd = calendar.time
+    @RequiresApi(Build.VERSION_CODES.R)
+    fun exportAnalyticsToExcel() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true) }
 
-                allOrders.filter { it.orderDate >= lastMonthStart && it.orderDate <= lastMonthEnd }
-            }
-            DateRange.CUSTOM -> {
-                // For now, return last 7 days. You can implement custom date picker later
-                calendar.add(Calendar.DAY_OF_YEAR, -7)
-                val weekAgo = calendar.time
-                allOrders.filter { it.orderDate >= weekAgo }
+            try {
+                val filePath = exportService.exportAnalyticsToExcel(_analytics.value)
+                _uiState.update {
+                    it.copy(
+                        isExporting = false,
+                        exportMessage = "Analytics exported successfully to: $filePath"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isExporting = false,
+                        errorMessage = "Export failed: ${e.message}"
+                    )
+                }
             }
         }
     }
 
-    private suspend fun getAnalyticsForDateRange(dateRange: DateRange): List<DailyAnalytics> {
-        val orders = getOrdersForDateRange(dateRange)
+    private fun loadDashboardData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
 
-        // Group orders by date and create DailyAnalytics
-        val analyticsByDate = orders
-            .groupBy {
-                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(it.orderDate)
+            try {
+                val (startDate, endDate) = getDateRange(_selectedPeriod.value)
+
+                orderRepository.getOrdersByDateRange(startDate, endDate)
+                    .catch { exception ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = "Failed to load dashboard data: ${exception.message}"
+                            )
+                        }
+                    }
+                    .collect { orders ->
+                        _orders.value = orders
+                        val metrics = calculateMetrics(orders)
+                        _dashboardMetrics.value = metrics
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Error loading dashboard: ${e.message}"
+                    )
+                }
             }
-            .map { (dateString, ordersForDate) ->
-                val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateString) ?: Date()
-
-                // Calculate top selling item for this date
-                val topItem = ordersForDate
-                    .flatMap { it.items }
-                    .groupBy { it.menuItemName }
-                    .mapValues { (_, items) -> items.sumOf { it.quantity } }
-                    .maxByOrNull { it.value }
-
-                DailyAnalytics(
-                    id = dateString,
-                    date = date,
-                    totalOrders = ordersForDate.size,
-                    totalRevenue = ordersForDate.sumOf { it.totalAmount },
-                    averageOrderValue = if (ordersForDate.isNotEmpty())
-                        ordersForDate.sumOf { it.totalAmount } / ordersForDate.size else 0,
-                    topSellingItem = topItem?.key ?: "N/A",
-                    topSellingItemQuantity = topItem?.value ?: 0,
-                    pendingOrders = ordersForDate.count { it.status == OrderStatus.PENDING },
-                    completedOrders = ordersForDate.count { it.status == OrderStatus.COMPLETED },
-                    cancelledOrders = ordersForDate.count { it.status == OrderStatus.CANCELLED },
-                    newCustomers = 0, // You can implement customer tracking later
-                    returningCustomers = 0 // You can implement customer tracking later
-                )
-            }
-            .sortedBy { it.date }
-
-        return analyticsByDate
+        }
     }
 
-    private fun getTopItems(orders: List<Order>): List<Pair<String, Int>> {
-        return orders
-            .flatMap { it.items }
-            .groupBy { it.menuItemName }
-            .mapValues { (_, items) -> items.sumOf { it.quantity } }
-            .toList()
+    private fun calculateMetrics(orders: List<Order>): DashboardMetrics {
+        if (orders.isEmpty()) {
+            return DashboardMetrics()
+        }
+
+        val totalRevenue = orders.sumOf { it.totalAmount }
+        val totalOrders = orders.size
+        val averageOrderValue = if (totalOrders > 0) totalRevenue / totalOrders else 0
+
+        // Calculate retention rate (customers with more than one order)
+        val customerOrderCounts = orders.groupBy { it.customerId }.mapValues { it.value.size }
+        val repeatCustomers = customerOrderCounts.values.count { it > 1 }
+        val retentionRate = if (customerOrderCounts.isNotEmpty()) {
+            (repeatCustomers.toDouble() / customerOrderCounts.size * 100).toInt()
+        } else 0
+
+        // Most and least bought items
+        val itemCounts = mutableMapOf<String, Int>()
+        orders.forEach { order ->
+            order.items.forEach { item ->
+                itemCounts[item.menuItemName] = itemCounts.getOrDefault(item.menuItemName, 0) + item.quantity
+            }
+        }
+
+        val mostBoughtItem = itemCounts.maxByOrNull { it.value }?.key ?: "N/A"
+        val leastBoughtItem = itemCounts.minByOrNull { it.value }?.key ?: "N/A"
+
+        // Most bought region
+        val regionCounts = orders.groupBy { extractRegion(it.address) }
+            .mapValues { it.value.size }
+        val mostBoughtRegion = regionCounts.maxByOrNull { it.value }?.key ?: "N/A"
+
+        // Frequently bought together
+        val frequentlyBoughtTogether = calculateFrequentlyBoughtTogether(orders)
+
+        // Item distribution for pie chart
+        val itemDistribution = itemCounts.map {
+            ItemDistribution(
+                itemName = it.key,
+                quantity = it.value,
+                percentage = (it.value.toDouble() / itemCounts.values.sum() * 100).toFloat()
+            )
+        }.sortedByDescending { it.quantity }
+
+        return DashboardMetrics(
+            totalRevenue = totalRevenue,
+            numberOfOrders = totalOrders,
+            averageOrderValue = averageOrderValue,
+            retentionRate = retentionRate,
+            mostBoughtItem = mostBoughtItem,
+            leastBoughtItem = leastBoughtItem,
+            mostBoughtRegion = mostBoughtRegion,
+            frequentlyBoughtTogether = frequentlyBoughtTogether,
+            itemDistribution = itemDistribution
+        )
+    }
+
+    private fun getDateRange(period: TimePeriod): Pair<Date, Date> {
+        val calendar = Calendar.getInstance()
+        val endDate = calendar.time
+
+        when (period) {
+            TimePeriod.DAY -> {
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+            }
+            TimePeriod.WEEK -> {
+                calendar.add(Calendar.DAY_OF_YEAR, -7)
+            }
+            TimePeriod.MONTH -> {
+                calendar.add(Calendar.MONTH, -1)
+            }
+        }
+
+        return Pair(calendar.time, endDate)
+    }
+
+    private fun extractRegion(address: String): String {
+        val parts = address.split(",")
+        return if (parts.size >= 2) parts[parts.size - 2].trim() else "Unknown"
+    }
+
+    private fun calculateFrequentlyBoughtTogether(orders: List<Order>): List<String> {
+        val itemPairs = mutableMapOf<String, Int>()
+
+        orders.forEach { order ->
+            val items = order.items.map { it.menuItemName }
+            for (i in items.indices) {
+                for (j in i + 1 until items.size) {
+                    val pair = listOf(items[i], items[j]).sorted().joinToString(" + ")
+                    itemPairs[pair] = itemPairs.getOrDefault(pair, 0) + 1
+                }
+            }
+        }
+
+        return itemPairs.toList()
             .sortedByDescending { it.second }
             .take(5)
+            .map { "${it.first} (${it.second} times)" }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun clearExportMessage() {
+        _uiState.update { it.copy(exportMessage = null) }
     }
 }
 
-// Export Types and Date Ranges
-enum class ExportType(val displayName: String) {
-    ORDERS("Orders Report"),
-    ANALYTICS("Analytics Report"),
-    INVENTORY("Inventory Report"),
-    CUSTOMERS("Customers Report")
-}
+data class DashboardUiState(
+    val isLoading: Boolean = false,
+    val isExporting: Boolean = false,
+    val errorMessage: String? = null,
+    val exportMessage: String? = null
+)
 
-enum class DateRange(val displayName: String) {
-    TODAY("Today"),
-    LAST_7_DAYS("Last 7 Days"),
-    LAST_30_DAYS("Last 30 Days"),
-    THIS_MONTH("This Month"),
-    LAST_MONTH("Last Month"),
-    CUSTOM("Custom Range")
+data class DashboardMetrics(
+    val totalRevenue: Int = 0,
+    val numberOfOrders: Int = 0,
+    val averageOrderValue: Int = 0,
+    val retentionRate: Int = 0,
+    val mostBoughtItem: String = "N/A",
+    val leastBoughtItem: String = "N/A",
+    val mostBoughtRegion: String = "N/A",
+    val frequentlyBoughtTogether: List<String> = emptyList(),
+    val itemDistribution: List<ItemDistribution> = emptyList()
+)
+
+data class ItemDistribution(
+    val itemName: String,
+    val quantity: Int,
+    val percentage: Float
+)
+
+enum class TimePeriod(val displayName: String) {
+    DAY("Today"),
+    WEEK("Last 7 Days"),
+    MONTH("Last 30 Days")
 }

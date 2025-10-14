@@ -7,8 +7,6 @@ import com.example.hofbusiness.data.repository.CustomerRepository
 import com.example.hofbusiness.data.repository.CustomerRepositoryImpl
 import com.example.hofbusiness.data.repository.OrderRepository
 import com.example.hofbusiness.data.repository.OrderRepositoryImpl
-import com.example.hofbusiness.data.repository.AnalyticsRepository
-import com.example.hofbusiness.data.repository.AnalyticsRepositoryImpl
 import com.example.hofbusiness.data.service.ExportService
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.PersistentCacheSettings
@@ -26,20 +24,7 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideFirebaseFirestore(): FirebaseFirestore {
-        val firestore = FirebaseFirestore.getInstance()
-
-        // Updated Firestore settings using new API
-        val settings = FirebaseFirestoreSettings.Builder()
-            .setLocalCacheSettings(
-                PersistentCacheSettings.newBuilder()
-                    .setSizeBytes(100 * 1024 * 1024) // 100 MB cache size
-                    .build()
-            )
-            .build()
-
-        firestore.firestoreSettings = settings
-
-        return firestore
+        return FirebaseFirestore.getInstance()
     }
 
     @Provides
@@ -65,14 +50,6 @@ object DatabaseModule {
         firestore: FirebaseFirestore
     ): CustomerRepository {
         return CustomerRepositoryImpl(firestore)
-    }
-
-    @Provides
-    @Singleton
-    fun provideAnalyticsRepository(
-        firestore: FirebaseFirestore
-    ): AnalyticsRepository {
-        return AnalyticsRepositoryImpl(firestore)
     }
 
     @Provides

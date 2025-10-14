@@ -32,7 +32,6 @@ class HouseOfFoodsApplication : Application() {
                 Log.e("Firebase", "Fallback configuration also failed: ${fallbackException.message}")
             }
         }
-
         // Setup offline support
         FirebaseConfig.setupOfflineSupport()
     }
@@ -42,6 +41,7 @@ class HouseOfFoodsApplication : Application() {
 
         // Wait for pending writes before terminating
         FirebaseConfig.waitForPendingWrites()
+        FirebaseConfig.terminateFirestore()
     }
 
     override fun onLowMemory() {

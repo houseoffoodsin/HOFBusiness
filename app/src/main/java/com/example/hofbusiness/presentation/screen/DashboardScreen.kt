@@ -1,14 +1,18 @@
 package com.example.hofbusiness.presentation.screen
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,15 +27,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.hofbusiness.presentation.viewmodel.DashboardViewModel
 import com.example.hofbusiness.presentation.viewmodel.ItemDistribution
 import com.example.hofbusiness.presentation.viewmodel.TimePeriod
-import android.content.Context
-import android.content.Intent
-import android.os.Build
-import android.widget.Toast
-import androidx.annotation.RequiresApi
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.window.Dialog
-import androidx.core.content.FileProvider
-import java.io.File
 
 @RequiresApi(Build.VERSION_CODES.R)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,9 +37,7 @@ fun DashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedPeriod by viewModel.selectedPeriod.collectAsState()
     val dashboardMetrics by viewModel.dashboardMetrics.collectAsState()
-    var showExportDialog by remember { mutableStateOf(false) }
-    var isExporting by remember { mutableStateOf(false) }
-    val context = LocalContext.current
+
     // Error Dialog
     uiState.errorMessage?.let { error ->
         AlertDialog(
@@ -59,13 +52,27 @@ fun DashboardScreen(
         )
     }
 
+    // Export Success Dialog
+    uiState.exportMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearExportMessage() },
+            title = { Text("Export Successful") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearExportMessage() }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {
-        // Header with Export Button
+        // Header with Export Options
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -78,16 +85,12 @@ fun DashboardScreen(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            IconButton(
-                onClick = { showExportDialog = true },
-                enabled = !isExporting
-            ) {
-                Icon(
-                    Icons.Default.ArrowDownward,
-                    contentDescription = "Export Report",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            ExportOptionsMenu(
+                onExportDashboard = { viewModel.exportDashboardReport() },
+                onExportOrders = { viewModel.exportOrdersToExcel() },
+                onExportAnalytics = { viewModel.exportAnalyticsToExcel() },
+                isExporting = uiState.isExporting
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -100,7 +103,7 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (uiState.Loading) {
+        if (uiState.isLoading) {
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
@@ -124,209 +127,72 @@ fun DashboardScreen(
                 }
 
                 item {
-                    // Insights Section
-                    InsightsSection(dashboardMetrics)
+                    // Business Insights Section
+                    BusinessInsightsSection(dashboardMetrics)
                 }
             }
         }
+    }
+}
 
+@RequiresApi(Build.VERSION_CODES.R)
+@Composable
+fun ExportOptionsMenu(
+    onExportDashboard: () -> Unit,
+    onExportOrders: () -> Unit,
+    onExportAnalytics: () -> Unit,
+    isExporting: Boolean
+) {
+    var expanded by remember { mutableStateOf(false) }
 
-        // Export Dialog
-        if (showExportDialog) {
-            ExportDialog(
-                onDismiss = { showExportDialog = false },
-                onExport = { exportType, dateRange ->
-                    showExportDialog = false
-                    isExporting = true
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            enabled = !isExporting
+        ) {
+            if (isExporting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = "Export Options",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
-                    // Perform export
-                    viewModel.exportData(
-                        exportType = exportType,
-                        dateRange = dateRange,
-                        onSuccess = { filePath ->
-                            isExporting = false
-                            // Show success message
-                            Toast.makeText(
-                                context,
-                                "Report exported to: $filePath",
-                                Toast.LENGTH_LONG
-                            ).show()
-
-                            // Optionally open the file or share it
-                            shareExportedFile(context, filePath)
-                        },
-                        onError = { error ->
-                            isExporting = false
-                            Toast.makeText(
-                                context,
-                                "Export failed: $error",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    )
-                }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Export Dashboard (PDF)") },
+                onClick = {
+                    onExportDashboard()
+                    expanded = false
+                },
+                leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) }
+            )
+            DropdownMenuItem(
+                text = { Text("Export Orders (Excel)") },
+                onClick = {
+                    onExportOrders()
+                    expanded = false
+                },
+                leadingIcon = { Icon(Icons.Default.TableChart, contentDescription = null) }
+            )
+            DropdownMenuItem(
+                text = { Text("Export Analytics (Excel)") },
+                onClick = {
+                    onExportAnalytics()
+                    expanded = false
+                },
+                leadingIcon = { Icon(Icons.Default.Analytics, contentDescription = null) }
             )
         }
-    }
-}
-
-// Export Dialog Component
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ExportDialog(
-    onDismiss: () -> Unit,
-    onExport: (ExportType, DateRange) -> Unit
-) {
-    var selectedExportType by remember { mutableStateOf(ExportType.ORDERS) }
-    var selectedDateRange by remember { mutableStateOf(DateRange.LAST_7_DAYS) }
-    var exportTypeExpanded by remember { mutableStateOf(false) }
-    var dateRangeExpanded by remember { mutableStateOf(false) }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp)
-            ) {
-                Text(
-                    text = "Export Report",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Export Type Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = exportTypeExpanded,
-                    onExpandedChange = { exportTypeExpanded = !exportTypeExpanded }
-                ) {
-                    OutlinedTextField(
-                        value = selectedExportType.displayName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Export Type") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = exportTypeExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                    )
-                    ExposedDropdownMenu(
-                        expanded = exportTypeExpanded,
-                        onDismissRequest = { exportTypeExpanded = false }
-                    ) {
-                        ExportType.entries.forEach { type ->
-                            DropdownMenuItem(
-                                text = { Text(type.displayName) },
-                                onClick = {
-                                    selectedExportType = type
-                                    exportTypeExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Date Range Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = dateRangeExpanded,
-                    onExpandedChange = { dateRangeExpanded = !dateRangeExpanded }
-                ) {
-                    OutlinedTextField(
-                        value = selectedDateRange.displayName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Date Range") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dateRangeExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                    )
-                    ExposedDropdownMenu(
-                        expanded = dateRangeExpanded,
-                        onDismissRequest = { dateRangeExpanded = false }
-                    ) {
-                        DateRange.entries.forEach { range ->
-                            DropdownMenuItem(
-                                text = { Text(range.displayName) },
-                                onClick = {
-                                    selectedDateRange = range
-                                    dateRangeExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Cancel")
-                    }
-
-                    Button(
-                        onClick = { onExport(selectedExportType, selectedDateRange) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Export")
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Export Types and Date Ranges
-enum class ExportType(val displayName: String) {
-    ORDERS("Orders Report"),
-    ANALYTICS("Analytics Report"),
-    INVENTORY("Inventory Report"),
-    CUSTOMERS("Customers Report")
-}
-
-enum class DateRange(val displayName: String) {
-    TODAY("Today"),
-    LAST_7_DAYS("Last 7 Days"),
-    LAST_30_DAYS("Last 30 Days"),
-    THIS_MONTH("This Month"),
-    LAST_MONTH("Last Month"),
-    CUSTOM("Custom Range")
-}
-
-// Helper function to share exported file
-fun shareExportedFile(context: Context, filePath: String) {
-    try {
-        val file = File(filePath)
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-
-        val shareIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-
-        context.startActivity(Intent.createChooser(shareIntent, "Share Report"))
-    } catch (e: Exception) {
-        Toast.makeText(context, "Could not share file: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -370,7 +236,7 @@ fun KeyMetricsSection(dashboardMetrics: com.example.hofbusiness.presentation.vie
                 MetricCard(
                     title = "Total Revenue",
                     value = "₹${dashboardMetrics.totalRevenue}",
-                    icon = Icons.Default.Star,
+                    icon = Icons.AutoMirrored.Filled.TrendingUp,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
@@ -379,6 +245,7 @@ fun KeyMetricsSection(dashboardMetrics: com.example.hofbusiness.presentation.vie
                 MetricCard(
                     title = "Number of Orders",
                     value = "${dashboardMetrics.numberOfOrders}",
+                    icon = Icons.Default.ShoppingCart,
                     color = MaterialTheme.colorScheme.secondary
                 )
             }
@@ -387,6 +254,7 @@ fun KeyMetricsSection(dashboardMetrics: com.example.hofbusiness.presentation.vie
                 MetricCard(
                     title = "Average Order Value",
                     value = "₹${dashboardMetrics.averageOrderValue}",
+                    icon = Icons.Default.AttachMoney,
                     color = MaterialTheme.colorScheme.tertiary
                 )
             }
@@ -395,6 +263,7 @@ fun KeyMetricsSection(dashboardMetrics: com.example.hofbusiness.presentation.vie
                 MetricCard(
                     title = "Retention Rate",
                     value = "${dashboardMetrics.retentionRate}%",
+                    icon = Icons.Default.Repeat,
                     color = MaterialTheme.colorScheme.error
                 )
             }
@@ -406,7 +275,7 @@ fun KeyMetricsSection(dashboardMetrics: com.example.hofbusiness.presentation.vie
 fun MetricCard(
     title: String,
     value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: Color
 ) {
     Card(
@@ -436,14 +305,12 @@ fun MetricCard(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)
                 )
-                icon?.let {
-                    Icon(
-                        imageVector = it,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(16.dp)
+                )
             }
 
             Text(
@@ -467,7 +334,7 @@ fun ItemDistributionChart(itemDistribution: List<ItemDistribution>) {
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                text = "Item Distribution",
+                text = "Item-wise Distribution",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
@@ -567,7 +434,7 @@ fun LegendItem(
 }
 
 @Composable
-fun InsightsSection(dashboardMetrics: com.example.hofbusiness.presentation.viewmodel.DashboardMetrics) {
+fun BusinessInsightsSection(dashboardMetrics: com.example.hofbusiness.presentation.viewmodel.DashboardMetrics) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -586,21 +453,28 @@ fun InsightsSection(dashboardMetrics: com.example.hofbusiness.presentation.viewm
 
             InsightItem(
                 title = "Most Popular Item",
-                value = dashboardMetrics.mostBoughtItem
+                value = dashboardMetrics.mostBoughtItem,
+                icon = Icons.AutoMirrored.Filled.TrendingUp
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             InsightItem(
                 title = "Least Popular Item",
-                value = dashboardMetrics.leastBoughtItem
+                value = dashboardMetrics.leastBoughtItem,
+                icon = Icons.AutoMirrored.Filled.TrendingDown
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             InsightItem(
                 title = "Top Region",
-                value = dashboardMetrics.mostBoughtRegion
+                value = dashboardMetrics.mostBoughtRegion,
+                icon = Icons.Default.LocationOn
             )
 
             if (dashboardMetrics.frequentlyBoughtTogether.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Frequently Bought Together:",
                     fontSize = 14.sp,
@@ -624,19 +498,30 @@ fun InsightsSection(dashboardMetrics: com.example.hofbusiness.presentation.viewm
 @Composable
 fun InsightItem(
     title: String,
-    value: String
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+        }
         Text(
             text = value,
             fontSize = 14.sp,

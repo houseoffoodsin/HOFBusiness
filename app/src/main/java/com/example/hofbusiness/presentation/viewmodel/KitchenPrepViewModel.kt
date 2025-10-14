@@ -3,13 +3,12 @@ package com.example.hofbusiness.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hofbusiness.data.model.Order
-import com.example.hofbusiness.data.model.OrderItem
 import com.example.hofbusiness.data.model.OrderStatus
 import com.example.hofbusiness.data.repository.OrderRepository
+import com.example.hofbusiness.presentation.state.KitchenPrepUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 
@@ -143,11 +142,6 @@ class KitchenPrepViewModel @Inject constructor(
         _uiState.update { it.copy(errorMessage = null) }
     }
 }
-
-data class KitchenPrepUiState(
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null
-)
 
 data class PrepItem(
     val menuItemName: String,

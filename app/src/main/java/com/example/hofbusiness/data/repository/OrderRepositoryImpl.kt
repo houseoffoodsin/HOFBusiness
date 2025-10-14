@@ -6,17 +6,19 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.example.hofbusiness.data.model.Order
 import com.example.hofbusiness.data.model.OrderStatus
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
 class OrderRepositoryImpl @Inject constructor(
-    private val firestore: FirebaseFirestore
+    firestore: FirebaseFirestore
 ) : OrderRepository {
 
     private val ordersCollection = firestore.collection("orders")
@@ -124,10 +126,29 @@ class OrderRepositoryImpl @Inject constructor(
         val dateFormat = SimpleDateFormat("ddMMyy", Locale.getDefault())
         val dateString = dateFormat.format(Date())
 
-        // Get the count of orders for today to generate sequence number
-        val todayStart = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        // Get today's start and tomorrow's start (to define range)
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val todayStart = Timestamp(calendar.time)
+
+        val calendarTomorrow = Calendar.getInstance().apply {
+            time = calendar.time
+            add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        Log.d("todayStart",todayStart.toString())
+
+        val tomorrowStart = Timestamp(calendarTomorrow.time)
+
+        Log.d("tomorrowStart",tomorrowStart.toString())
+        // Query today's orders based on Timestamp range
         val todayOrders = ordersCollection
             .whereGreaterThanOrEqualTo("orderDate", todayStart)
+            .whereLessThan("orderDate", tomorrowStart)
             .get()
             .await()
 
@@ -136,7 +157,7 @@ class OrderRepositoryImpl @Inject constructor(
     }
 
     // Example of using the new Firebase config in a repository method
-    suspend fun syncOfflineData() {
+    fun syncOfflineData() {
         try {
             // Enable network to sync
             FirebaseConfig.setupOfflineSupport()
