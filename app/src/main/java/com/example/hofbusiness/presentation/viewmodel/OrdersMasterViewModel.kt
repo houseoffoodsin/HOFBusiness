@@ -22,6 +22,9 @@ class OrdersMasterViewModel @Inject constructor(
 
     private val _allOrders = MutableStateFlow<List<Order>>(emptyList())
 
+    private val _selectedDate = MutableStateFlow(Date())
+    val selectedDate: StateFlow<Date> = _selectedDate.asStateFlow()
+
     val filteredOrders: StateFlow<List<Order>> = combine(
         _allOrders,
         _uiState
@@ -35,6 +38,10 @@ class OrdersMasterViewModel @Inject constructor(
 
     init {
         loadOrders()
+    }
+
+    fun selectDate(date: Date) {
+        _selectedDate.value = date
     }
 
     private fun loadOrders() {

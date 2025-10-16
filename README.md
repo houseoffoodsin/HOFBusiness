@@ -62,4 +62,12 @@ Built using **Kotlin**, **Jetpack Compose**, and **Firebase**, it features a cle
 - Cleanly formatted with headers and structure
 
 ---
+---
 
+## 📸 App Screenshots
+
+| Dashboard                                   | Analytics                                      | Orders List                        |
+|---------------------------------------------|------------------------------------------------|------------------------------------|
+| ![Dashboard Screen](images/Dashboard.jpg)   | ![Analytics Page](images/analytics.jpg)        | ![Add Order](images/Addorder.jpg)  |
+| ------------------------------------------- | ----------------------------                   | ---------------------------------- |
+| ![Orders Screen](images/OrdersList.jpg)     | ![Kitchen Prep Screen](images/KitchenPrep.jpg) | 

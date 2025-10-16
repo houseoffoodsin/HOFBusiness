@@ -12,8 +12,10 @@ import com.example.hofbusiness.data.model.Order
 import com.example.hofbusiness.data.model.OrderStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
@@ -27,55 +29,80 @@ class ExportService @Inject constructor(
 
     @RequiresApi(Build.VERSION_CODES.R)
     suspend fun exportOrdersToExcel(orders: List<Order>): String = withContext(Dispatchers.IO) {
-        val workbook = XSSFWorkbook()
-        val sheet = workbook.createSheet("Orders Report")
+        val exportsDir = getExportsDirectory()
+        val fileName = "orders_report.xlsx"
+        val file = File(exportsDir, fileName)
 
-        // Create header row
-        val headerRow = sheet.createRow(0)
-        val headers = arrayOf(
-            "Order ID", "Customer Name", "Phone", "Order Date",
-            "Status", "Delivery Mode", "Payment Mode", "Total Amount", "Items"
-        )
+        val workbook: XSSFWorkbook
+        val sheet: Sheet
 
-        headers.forEachIndexed { index, header ->
-            headerRow.createCell(index).setCellValue(header)
-        }
-
-        // Add data rows
-        orders.forEachIndexed { rowIndex, order ->
-            val row = sheet.createRow(rowIndex + 1)
-            row.createCell(0).setCellValue(order.id)
-            row.createCell(1).setCellValue(order.customerName)
-            row.createCell(2).setCellValue(order.mobileNumber)
-            row.createCell(3).setCellValue(
-                SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(order.orderDate)
-            )
-            row.createCell(4).setCellValue(order.status.name)
-            row.createCell(5).setCellValue(order.deliveryMode.displayName)
-            row.createCell(6).setCellValue(order.paymentMode.displayName)
-            row.createCell(7).setCellValue(order.totalAmount.toDouble())
-
-            // Items as comma-separated string
-            val itemsString = order.items.joinToString(", ") {
-                "${it.menuItemName} (${it.size}) x${it.quantity}"
+        if (file.exists()) {
+            // ✅ Open existing workbook
+            FileInputStream(file).use { inputStream ->
+                workbook = XSSFWorkbook(inputStream)
             }
-            row.createCell(8).setCellValue(itemsString)
+            sheet = workbook.getSheetAt(0)
+        } else {
+            // ✅ Create new workbook if not exists
+            workbook = XSSFWorkbook()
+            sheet = workbook.createSheet("Orders Report")
+
+            // Create header row
+            val headerRow = sheet.createRow(0)
+            val headers = arrayOf(
+                "Order ID", "Customer Name", "Phone", "Order Date",
+                "Status", "Delivery Mode", "Payment Mode", "Total Amount", "Items"
+            )
+            headers.forEachIndexed { index, header ->
+                headerRow.createCell(index).setCellValue(header)
+            }
         }
 
-        // Auto-size columns
-//        headers.indices.forEach { sheet.autoSizeColumn(it) }
-
-        // Save file
-        val fileName = "orders_report_${System.currentTimeMillis()}.xlsx"
-        val file = File(getExportsDirectory(), fileName)
-
-        FileOutputStream(file).use { outputStream ->
-            workbook.write(outputStream)
+        // ✅ Collect all existing order IDs to avoid duplicates
+        val existingOrderIds = mutableSetOf<String>()
+        for (rowIndex in 1..sheet.lastRowNum) {
+            val row = sheet.getRow(rowIndex)
+            val cell = row?.getCell(0)
+            if (cell != null) {
+                existingOrderIds.add(cell.toString().trim())
+            }
         }
+
+        // ✅ Filter out duplicate orders
+        val newOrders = orders.filterNot { existingOrderIds.contains(it.id) }
+
+        if (newOrders.isNotEmpty()) {
+            val startRowIndex = sheet.lastRowNum + 1
+
+            newOrders.forEachIndexed { index, order ->
+                val row = sheet.createRow(startRowIndex + index)
+                row.createCell(0).setCellValue(order.id)
+                row.createCell(1).setCellValue(order.customerName)
+                row.createCell(2).setCellValue(order.mobileNumber)
+                row.createCell(3).setCellValue(
+                    SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(order.orderDate)
+                )
+                row.createCell(4).setCellValue(order.status.name)
+                row.createCell(5).setCellValue(order.deliveryMode.displayName)
+                row.createCell(6).setCellValue(order.paymentMode.displayName)
+                row.createCell(7).setCellValue(order.totalAmount.toDouble())
+
+                val itemsString = order.items.joinToString(", ") {
+                    "${it.menuItemName} (${it.size}) x${it.quantity}"
+                }
+                row.createCell(8).setCellValue(itemsString)
+            }
+
+            // ✅ Save updates
+            FileOutputStream(file).use { outputStream ->
+                workbook.write(outputStream)
+            }
+        }
+
         workbook.close()
-
         file.absolutePath
     }
+
 
     @RequiresApi(Build.VERSION_CODES.R)
     suspend fun exportAnalyticsToExcel(analytics: List<DailyAnalytics>): String = withContext(Dispatchers.IO) {
@@ -123,130 +150,130 @@ class ExportService @Inject constructor(
         file.absolutePath
     }
 
-    @RequiresApi(Build.VERSION_CODES.R)
-    suspend fun exportInventoryToExcel(): String = withContext(Dispatchers.IO) {
-        val workbook = XSSFWorkbook()
-        val sheet = workbook.createSheet("Inventory Report")
+//    @RequiresApi(Build.VERSION_CODES.R)
+//    suspend fun exportInventoryToExcel(): String = withContext(Dispatchers.IO) {
+//        val workbook = XSSFWorkbook()
+//        val sheet = workbook.createSheet("Inventory Report")
+//
+//        // Create header row
+//        val headerRow = sheet.createRow(0)
+//        val headers = arrayOf(
+//            "Item Name", "Price 250g", "Price 500g", "Price 1000g", "Available"
+//        )
+//
+//        headers.forEachIndexed { index, header ->
+//            headerRow.createCell(index).setCellValue(header)
+//        }
+//
+//        // Sample inventory data - replace with actual data source
+//        val sampleItems = listOf(
+//            MenuItem("1", "Chicken Biryani", 1200, 600, 300, true),
+//            MenuItem("2", "Mutton Biryani", 1500, 800, 400, true),
+//            MenuItem("3", "Veg Biryani", 1000, 500, 250, true),
+//            MenuItem("4", "Chicken Dum Biryani", 1300, 650, 325, true),
+//            MenuItem("5", "Mutton Dum Biryani", 1600, 850, 425, true),
+//            MenuItem("6", "Prawn Biryani", 1400, 700, 350, true),
+//            MenuItem("7", "Fish Biryani", 1350, 675, 340, true),
+//            MenuItem("8", "Egg Biryani", 900, 450, 225, true)
+//        )
+//
+//        sampleItems.forEachIndexed { rowIndex, item ->
+//            val row = sheet.createRow(rowIndex + 1)
+//            row.createCell(0).setCellValue(item.name)
+//            row.createCell(1).setCellValue(item.price250g.toDouble())
+//            row.createCell(2).setCellValue(item.price500g.toDouble())
+//            row.createCell(3).setCellValue(item.price1000g.toDouble())
+//            row.createCell(4).setCellValue(if (item.isAvailable) "Yes" else "No")
+//        }
+//
+//        // Auto-size columns
+//        headers.indices.forEach { sheet.autoSizeColumn(it) }
+//
+//        // Save file
+//        val fileName = "inventory_report_${System.currentTimeMillis()}.xlsx"
+//        val file = File(getExportsDirectory(), fileName)
+//
+//        FileOutputStream(file).use { outputStream ->
+//            workbook.write(outputStream)
+//        }
+//        workbook.close()
+//
+//        file.absolutePath
+//    }
 
-        // Create header row
-        val headerRow = sheet.createRow(0)
-        val headers = arrayOf(
-            "Item Name", "Price 250g", "Price 500g", "Price 1000g", "Available"
-        )
+//    @RequiresApi(Build.VERSION_CODES.R)
+//    suspend fun exportCustomersToExcel(customers: List<Customer>): String = withContext(Dispatchers.IO) {
+//        val workbook = XSSFWorkbook()
+//        val sheet = workbook.createSheet("Customers Report")
+//
+//        // Create header row
+//        val headerRow = sheet.createRow(0)
+//        val headers = arrayOf(
+//            "Customer ID", "Name", "Mobile Number", "Address", "Region",
+//            "First Order Date", "Last Order Date", "Total Orders"
+//        )
+//
+//        headers.forEachIndexed { index, header ->
+//            headerRow.createCell(index).setCellValue(header)
+//        }
+//
+//        // Add data rows using your existing Customer data class
+//        customers.forEachIndexed { rowIndex, customer ->
+//            val row = sheet.createRow(rowIndex + 1)
+//            row.createCell(0).setCellValue(customer.id)
+//            row.createCell(1).setCellValue(customer.name)
+//            row.createCell(2).setCellValue(customer.mobileNumber)
+//            row.createCell(3).setCellValue(customer.address)
+//            row.createCell(4).setCellValue(customer.region)
+//            row.createCell(5).setCellValue(
+//                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(customer.firstOrderDate)
+//            )
+//            row.createCell(6).setCellValue(
+//                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(customer.lastOrderDate)
+//            )
+//            row.createCell(7).setCellValue(customer.totalOrders.toDouble())
+//        }
+//
+//        // Auto-size columns
+//        headers.indices.forEach { sheet.autoSizeColumn(it) }
+//
+//        // Save file
+//        val fileName = "customers_report_${System.currentTimeMillis()}.xlsx"
+//        val file = File(getExportsDirectory(), fileName)
+//
+//        FileOutputStream(file).use { outputStream ->
+//            workbook.write(outputStream)
+//        }
+//        workbook.close()
+//        file.absolutePath
+//    }
 
-        headers.forEachIndexed { index, header ->
-            headerRow.createCell(index).setCellValue(header)
-        }
-
-        // Sample inventory data - replace with actual data source
-        val sampleItems = listOf(
-            MenuItem("1", "Chicken Biryani", 1200, 600, 300, true),
-            MenuItem("2", "Mutton Biryani", 1500, 800, 400, true),
-            MenuItem("3", "Veg Biryani", 1000, 500, 250, true),
-            MenuItem("4", "Chicken Dum Biryani", 1300, 650, 325, true),
-            MenuItem("5", "Mutton Dum Biryani", 1600, 850, 425, true),
-            MenuItem("6", "Prawn Biryani", 1400, 700, 350, true),
-            MenuItem("7", "Fish Biryani", 1350, 675, 340, true),
-            MenuItem("8", "Egg Biryani", 900, 450, 225, true)
-        )
-
-        sampleItems.forEachIndexed { rowIndex, item ->
-            val row = sheet.createRow(rowIndex + 1)
-            row.createCell(0).setCellValue(item.name)
-            row.createCell(1).setCellValue(item.price250g.toDouble())
-            row.createCell(2).setCellValue(item.price500g.toDouble())
-            row.createCell(3).setCellValue(item.price1000g.toDouble())
-            row.createCell(4).setCellValue(if (item.isAvailable) "Yes" else "No")
-        }
-
-        // Auto-size columns
-        headers.indices.forEach { sheet.autoSizeColumn(it) }
-
-        // Save file
-        val fileName = "inventory_report_${System.currentTimeMillis()}.xlsx"
-        val file = File(getExportsDirectory(), fileName)
-
-        FileOutputStream(file).use { outputStream ->
-            workbook.write(outputStream)
-        }
-        workbook.close()
-
-        file.absolutePath
-    }
-
-    @RequiresApi(Build.VERSION_CODES.R)
-    suspend fun exportCustomersToExcel(customers: List<Customer>): String = withContext(Dispatchers.IO) {
-        val workbook = XSSFWorkbook()
-        val sheet = workbook.createSheet("Customers Report")
-
-        // Create header row
-        val headerRow = sheet.createRow(0)
-        val headers = arrayOf(
-            "Customer ID", "Name", "Mobile Number", "Address", "Region",
-            "First Order Date", "Last Order Date", "Total Orders"
-        )
-
-        headers.forEachIndexed { index, header ->
-            headerRow.createCell(index).setCellValue(header)
-        }
-
-        // Add data rows using your existing Customer data class
-        customers.forEachIndexed { rowIndex, customer ->
-            val row = sheet.createRow(rowIndex + 1)
-            row.createCell(0).setCellValue(customer.id)
-            row.createCell(1).setCellValue(customer.name)
-            row.createCell(2).setCellValue(customer.mobileNumber)
-            row.createCell(3).setCellValue(customer.address)
-            row.createCell(4).setCellValue(customer.region)
-            row.createCell(5).setCellValue(
-                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(customer.firstOrderDate)
-            )
-            row.createCell(6).setCellValue(
-                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(customer.lastOrderDate)
-            )
-            row.createCell(7).setCellValue(customer.totalOrders.toDouble())
-        }
-
-        // Auto-size columns
-        headers.indices.forEach { sheet.autoSizeColumn(it) }
-
-        // Save file
-        val fileName = "customers_report_${System.currentTimeMillis()}.xlsx"
-        val file = File(getExportsDirectory(), fileName)
-
-        FileOutputStream(file).use { outputStream ->
-            workbook.write(outputStream)
-        }
-        workbook.close()
-        file.absolutePath
-    }
-
-    @RequiresApi(Build.VERSION_CODES.R)
-    suspend fun exportOrdersToCSV(orders: List<Order>): String = withContext(Dispatchers.IO) {
-        val fileName = "orders_report_${System.currentTimeMillis()}.csv"
-        val file = File(getExportsDirectory(), fileName)
-
-        file.bufferedWriter().use { writer ->
-            // Write header
-            writer.appendLine("Order ID,Customer Name,Phone,Order Date,Status,Delivery Mode,Payment Mode,Total Amount,Items")
-
-            // Write data
-            orders.forEach { order ->
-                val itemsString = order.items.joinToString("; ") {
-                    "${it.menuItemName} (${it.size}) x${it.quantity}"
-                }
-
-                writer.appendLine(
-                    "${order.id},${order.customerName},${order.mobileNumber}," +
-                            "${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(order.orderDate)}," +
-                            "${order.status.name},${order.deliveryMode.displayName},${order.paymentMode.displayName}," +
-                            "${order.totalAmount},\"${itemsString}\""
-                )
-            }
-        }
-
-        file.absolutePath
-    }
+//    @RequiresApi(Build.VERSION_CODES.R)
+//    suspend fun exportOrdersToCSV(orders: List<Order>): String = withContext(Dispatchers.IO) {
+//        val fileName = "orders_report_${System.currentTimeMillis()}.csv"
+//        val file = File(getExportsDirectory(), fileName)
+//
+//        file.bufferedWriter().use { writer ->
+//            // Write header
+//            writer.appendLine("Order ID,Customer Name,Phone,Order Date,Status,Delivery Mode,Payment Mode,Total Amount,Items")
+//
+//            // Write data
+//            orders.forEach { order ->
+//                val itemsString = order.items.joinToString("; ") {
+//                    "${it.menuItemName} (${it.size}) x${it.quantity}"
+//                }
+//
+//                writer.appendLine(
+//                    "${order.id},${order.customerName},${order.mobileNumber}," +
+//                            "${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(order.orderDate)}," +
+//                            "${order.status.name},${order.deliveryMode.displayName},${order.paymentMode.displayName}," +
+//                            "${order.totalAmount},\"${itemsString}\""
+//                )
+//            }
+//        }
+//
+//        file.absolutePath
+//    }
 
     @RequiresApi(Build.VERSION_CODES.R)
     suspend fun exportDashboardReport(

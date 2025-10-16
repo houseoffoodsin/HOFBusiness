@@ -1,12 +1,12 @@
 package com.example.hofbusiness.presentation.screen
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -21,7 +21,6 @@ import com.example.hofbusiness.data.model.Order
 import com.example.hofbusiness.data.model.OrderStatus
 import com.example.hofbusiness.presentation.viewmodel.OrdersMasterViewModel
 import com.example.hofbusiness.presentation.viewmodel.OrderStatusField
-import com.google.firebase.Timestamp
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -95,7 +94,8 @@ fun OrdersMasterScreen(
                 startDate = uiState.startDate,
                 endDate = uiState.endDate,
                 onStatusChange = viewModel::setStatusFilter,
-                onDateRangeChange = viewModel::setDateFilter
+                onDateRangeChange = viewModel::setDateFilter,
+                viewModel = viewModel
             )
         }
 
@@ -151,8 +151,15 @@ fun FiltersSection(
     startDate: Date?,
     endDate: Date?,
     onStatusChange: (OrderStatus?) -> Unit,
-    onDateRangeChange: (Date?, Date?) -> Unit
+    onDateRangeChange: (Date?, Date?) -> Unit,
+    viewModel: OrdersMasterViewModel
+
 ) {
+
+    var showDatePicker by remember { mutableStateOf(false) }
+    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val selectedDate by viewModel.selectedDate.collectAsState()
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -209,54 +216,50 @@ fun FiltersSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Date Range Buttons
+            // Date Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
-                    onClick = {
-                        val calendar = Calendar.getInstance().apply {
-                            set(Calendar.HOUR_OF_DAY, 0)
-                            set(Calendar.MINUTE, 0)
-                            set(Calendar.SECOND, 0)
-                            set(Calendar.MILLISECOND, 0)
-                        }
+                Text(
+                    text = "Orders Date: ${dateFormat.format(selectedDate)}",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
 
-                        val calendarTomorrow = Calendar.getInstance().apply {
-                            time = calendar.time
-                            add(Calendar.DAY_OF_YEAR, 1)
-                        }
-
-                        onDateRangeChange(calendar.time, calendarTomorrow.time)
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Today")
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        val calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, -7)
-                        val weekAgo = calendar.time
-                        onDateRangeChange(weekAgo, Date())
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Last 7 Days")
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        onDateRangeChange(null, null)
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Clear")
+                IconButton(onClick = { showDatePicker = true }) {
+                    Icon(
+                        Icons.Default.CalendarToday,
+                        contentDescription = "Select Date",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
+    }
+
+    // Date Picker Dialog
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDateSelected = { date ->
+                val calendar = Calendar.getInstance()
+                calendar.time = date
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                val startOfDay = calendar.time
+
+                calendar.add(Calendar.DAY_OF_YEAR, 1)
+                val endOfDay = calendar.time
+                onDateRangeChange(startOfDay,endOfDay)
+                showDatePicker = false
+
+                viewModel.selectDate(date)
+            },
+            onDismiss = { showDatePicker = false }
+        )
     }
 }
 
