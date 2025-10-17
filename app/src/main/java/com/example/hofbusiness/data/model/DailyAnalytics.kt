@@ -15,28 +15,4 @@ data class DailyAnalytics(
     val cancelledOrders: Int = 0,
     val newCustomers: Int = 0,
     val returningCustomers: Int = 0
-) {
-    // Helper function to get completion rate
-    fun getCompletionRate(): Float {
-        return if (totalOrders > 0) {
-            (completedOrders.toFloat() / totalOrders.toFloat()) * 100
-        } else 0f
-    }
-
-    // Helper function to get cancellation rate
-    fun getCancellationRate(): Float {
-        return if (totalOrders > 0) {
-            (cancelledOrders.toFloat() / totalOrders.toFloat()) * 100
-        } else 0f
-    }
-
-    // Helper function to format revenue
-    fun getFormattedRevenue(): String {
-        return "₹$totalRevenue"
-    }
-
-    // Helper function to format average order value
-    fun getFormattedAverageOrderValue(): String {
-        return "₹$averageOrderValue"
-    }
-}
+)

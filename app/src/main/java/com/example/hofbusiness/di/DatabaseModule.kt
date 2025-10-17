@@ -1,6 +1,8 @@
 package com.example.hofbusiness.di
 
 import android.content.Context
+import com.example.hofbusiness.data.repository.AnalyticsRepository
+import com.example.hofbusiness.data.repository.AnalyticsRepositoryImpl
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.hofbusiness.data.repository.CustomerRepository
@@ -58,5 +60,13 @@ object DatabaseModule {
         @ApplicationContext context: Context
     ): ExportService {
         return ExportService(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAnalyticsRepository(
+        firestore: FirebaseFirestore
+    ): AnalyticsRepository {
+        return AnalyticsRepositoryImpl(firestore)
     }
 }

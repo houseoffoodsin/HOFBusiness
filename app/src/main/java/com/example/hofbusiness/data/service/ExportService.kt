@@ -12,6 +12,7 @@ import com.example.hofbusiness.data.model.Order
 import com.example.hofbusiness.data.model.OrderStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.poi.ss.usermodel.Row
 import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.File
@@ -103,29 +104,56 @@ class ExportService @Inject constructor(
         file.absolutePath
     }
 
-
     @RequiresApi(Build.VERSION_CODES.R)
     suspend fun exportAnalyticsToExcel(analytics: List<DailyAnalytics>): String = withContext(Dispatchers.IO) {
-        val workbook = XSSFWorkbook()
-        val sheet = workbook.createSheet("Analytics Report")
+        val exportsDir = getExportsDirectory()
+        val fileName = "analytics_report.xlsx"
+        val file = File(exportsDir, fileName)
 
-        // Create header row
-        val headerRow = sheet.createRow(0)
-        val headers = arrayOf(
-            "Date", "Total Orders", "Total Revenue", "Average Order Value",
-            "Top Item", "Top Item Quantity", "Pending Orders", "Completed Orders"
-        )
+        val workbook: XSSFWorkbook
+        val sheet: Sheet
 
-        headers.forEachIndexed { index, header ->
-            headerRow.createCell(index).setCellValue(header)
+        if (file.exists()) {
+            // ✅ Open existing workbook
+            FileInputStream(file).use { inputStream ->
+                workbook = XSSFWorkbook(inputStream)
+            }
+            sheet = workbook.getSheetAt(0)
+        } else {
+            // ✅ Create new workbook if not exists
+            workbook = XSSFWorkbook()
+            sheet = workbook.createSheet("Analytics Report")
+
+            // Create header row
+            val headerRow = sheet.createRow(0)
+            val headers = arrayOf(
+                "Date", "Total Orders", "Total Revenue", "Average Order Value",
+                "Top Item", "Top Item Quantity", "Pending Orders", "Completed Orders"
+            )
+
+            headers.forEachIndexed { index, header ->
+                headerRow.createCell(index).setCellValue(header)
+            }
         }
 
-        // Add data rows
-        analytics.forEachIndexed { rowIndex, data ->
-            val row = sheet.createRow(rowIndex + 1)
-            row.createCell(0).setCellValue(
-                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(data.date)
-            )
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+
+        // ✅ Map of existing dates → row index
+        val existingDateRows = mutableMapOf<String, Row>()
+        for (rowIndex in 1..sheet.lastRowNum) {
+            val row = sheet.getRow(rowIndex)
+            val cell = row?.getCell(0)
+            if (cell != null) {
+                existingDateRows[cell.toString().trim()] = row
+            }
+        }
+
+        analytics.forEach { data ->
+            val formattedDate = dateFormat.format(data.date)
+            val row = existingDateRows[formattedDate] ?: sheet.createRow(sheet.lastRowNum + 1)
+
+            // ✅ Write or update cells
+            row.createCell(0).setCellValue(formattedDate)
             row.createCell(1).setCellValue(data.totalOrders.toDouble())
             row.createCell(2).setCellValue(data.totalRevenue.toDouble())
             row.createCell(3).setCellValue(data.averageOrderValue.toDouble())
@@ -135,13 +163,7 @@ class ExportService @Inject constructor(
             row.createCell(7).setCellValue(data.completedOrders.toDouble())
         }
 
-        // Auto-size columns
-//        headers.indices.forEach { sheet.autoSizeColumn(it) }
-
-        // Save file
-        val fileName = "analytics_report_${System.currentTimeMillis()}.xlsx"
-        val file = File(getExportsDirectory(), fileName)
-
+        // ✅ Save changes
         FileOutputStream(file).use { outputStream ->
             workbook.write(outputStream)
         }
@@ -149,6 +171,8 @@ class ExportService @Inject constructor(
 
         file.absolutePath
     }
+
+
 
 //    @RequiresApi(Build.VERSION_CODES.R)
 //    suspend fun exportInventoryToExcel(): String = withContext(Dispatchers.IO) {

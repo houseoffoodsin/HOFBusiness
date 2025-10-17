@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hofbusiness.data.model.DailyAnalytics
 import com.example.hofbusiness.data.model.Order
+import com.example.hofbusiness.data.repository.AnalyticsRepository
 import com.example.hofbusiness.data.repository.OrderRepository
 import com.example.hofbusiness.data.service.ExportService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +18,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
+    private val analyticsRepository: AnalyticsRepository,
     private val exportService: ExportService
 ) : ViewModel() {
 
@@ -100,7 +102,23 @@ class DashboardViewModel @Inject constructor(
             _uiState.update { it.copy(isExporting = true) }
 
             try {
-                val filePath = exportService.exportAnalyticsToExcel(_analytics.value)
+                // If analytics is empty, generate from orders
+                var analyticsToExport = _analytics.value
+
+                if (analyticsToExport.isEmpty()) {
+                    // Generate analytics from current orders
+                    val (_, endDate) = getDateRange(_selectedPeriod.value)
+                    val generatedAnalytics = analyticsRepository.generateAnalyticsFromOrders(
+                        _orders.value,
+                        endDate
+                    )
+                    analyticsToExport = listOf(generatedAnalytics)
+
+                    // Save to Firestore for future reference
+                    analyticsRepository.saveDailyAnalytics(generatedAnalytics)
+                }
+
+                val filePath = exportService.exportAnalyticsToExcel(analyticsToExport)
                 _uiState.update {
                     it.copy(
                         isExporting = false,
